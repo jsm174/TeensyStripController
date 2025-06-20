@@ -1,47 +1,285 @@
-TeensyStripController 1.03
-==========================
+# TeensyStripController - DOF Compatible Version
 
-Firmware for a Teensy 3.1 or Teensy 3.2 to control WS2811/WS2812 based ledstrips. Fully compatible with the DirectOutput Framework.
+Firmware for a Teensy LC/3.1/3.2 to control WS2811/WS2812 based LED strips. **Updated to be fully compatible with the Direct Output Framework (DOF)** using flat RGB byte arrays.
 
 ![Teensy 3.1 with OctoWS2811 adaptor](http://www.pjrc.com/store/octo28_adaptor_6.jpg)
 
+## What's New in This Version
 
-Hardware
---------
-This code has been designed for Teensy 3.1 or Teensy 3.2. For easy installation of the ledstrips is is highly recommended to get a OctoWS2811 adaptor board as well. 
-Both boards are available at http://pjrc.com/store/ 
-For the Teensy be sure to get a Teensy 3.2, preferably the version which has the pins already soldered in.
+This version has been **updated from the original TeensyStripController** to support the DOF-compatible protocol:
 
-Ledstrips using the WS2812 are widely available on Ebay, AliExpress, Adafruit (Neopixels) and many other sources. Be careful when ordering ledstrips. After all these are low cost china products with all the pros and cons these products have.
+- **Enhanced Teensy Firmware**: The Arduino sketch now uses flat RGB byte arrays instead of individual RGB values, making it fully compatible with the Direct Output Framework
+- **macOS Controller**: Complete C++ implementation of the protocol with comprehensive demo
+- **Verified Compatibility**: Both Teensy firmware and macOS controller use the same command set and data format
+- **PlatformIO Support**: Modern build system with automatic dependency management
 
-Make sure your power supply is strong enough. Every led needs up to 60ma and having strips with a lot of leds can easily drive you into high power requirements (e.g. 1m of ledstrip with 60 leds needs a PSU delivering at least 3.6A). Use thick wires for the power connections to the ledstrips and be sure to inject power after every 100-200 leds at least. Be careful to do the wiring correctly, otherwise the ledstrip, the wiring or even the PSU can get pretty hot which can be a fire hazard and which is bad for the lifetime of the whole setup. If using a lot of leds, be even more careful! A lot of leds means a lot of amperes and a lot of amperes with low voltage is also used for welding!
+## Hardware Support
 
-Software
---------
-The code of this project can be compiled and installed on the Teensy with the Arduino IDE with installed Teensyduino extensions.
+### Teensy Models
+- **Teensy LC**: 80 LEDs per strip maximum (640 total) - optimized for 8KB RAM
+- **Teensy 3.1/3.2**: 1100 LEDs per strip maximum (8800 total)
 
-Currently the firmware supports up to 1100 leds on each of the  output 8 channels. Keep in mind that every led on a strip takes a little bit of time to update. To get some etimate on the max framerate you can achieve take the number of leds on your longest connected strip and multiply by 30microseconds. This will give you the approx time technically required for a single update of the strip. If you divide 1000000 by the result of the first calculation, you get the max update frequency (real update frequency will be a bit lower). Example: 500 (leds) * 30 microsconds= 15000 microseconds. 1000000 / 15000 = 66 Hz max update frequency (try to stay well above 30hz with your setup).
+### LED Strip Connections
+- **8 LED strips** supported simultaneously
+- **Pin assignments**: 2, 14, 7, 8, 6, 20, 21, 5
+- **100Ω resistor** required on each data line
 
-To drive the controller at least DirectOutput Framework R3 is required. Check out the DOF docu page on _BuiltIn Output controllers_ for details on the configuration of DOF for the TeensyStrip controller.
+## Quick Start
 
-Integrated Product
-------------------
+### 1. Build and Upload Teensy Firmware
 
-The Oak Micros Pinball Addressable LEDs (PAL) board is a pre-built integrated product that can be used to control up to 8 addressable LEDs strips. It uses the Teensy 3.2 and the latest software from this site. It includes a pushbutton which can be used to initiate a LED test when powered up and has a pluggable screw connector for power and 6 LED connections. The remaining two other LED connections are available on an optional 0.1" header.
+#### Using PlatformIO (Recommended)
+```bash
+# Install PlatformIO if not already installed
+pip install platformio
+
+# Upload to Teensy LC
+platformio run --target upload --environment teensylc
+
+# Upload to Teensy 3.1
+platformio run --target upload --environment teensy31
+
+# Upload to Teensy 3.2
+platformio run --target upload --environment teensy32
+```
+
+#### Using Arduino IDE
+1. Install [Arduino IDE](https://www.arduino.cc/en/software) and [Teensyduino](https://www.pjrc.com/teensy/teensyduino.html)
+2. Open `src/main.cpp` in Arduino IDE
+3. Select your Teensy model from Tools → Board
+4. Click Upload
+
+### 2. Test with macOS Controller
+
+```bash
+# Build the controller
+cd macos_controller
+mkdir build && cd build
+cmake ..
+make
+
+# Find your Teensy
+./teensy_led_controller --list-ports
+
+# Run the demo (replace with your port)
+./teensy_led_controller --port /dev/cu.usbmodem123456 --demo
+```
+
+## Hardware Setup
+
+### Required Connections
+```
+Teensy Pin 2 → [100Ω resistor] → LED Strip Data
+12V Power Supply + → LED Strip VCC (DO NOT connect to Teensy!)
+12V Power Supply - → LED Strip GND
+Teensy GND → LED Strip GND (common ground required)
+```
+
+### All 8 Pin Assignments
+- **Pin 2**: LED Strip #1 ⭐ (primary/tested)
+- **Pin 14**: LED Strip #2
+- **Pin 7**: LED Strip #3
+- **Pin 8**: LED Strip #4
+- **Pin 6**: LED Strip #5
+- **Pin 20**: LED Strip #6
+- **Pin 21**: LED Strip #7
+- **Pin 5**: LED Strip #8
+
+### Power Requirements
+- **Every LED**: Up to 60mA current draw
+- **Example**: 60 LEDs = 3.6A minimum power supply
+- **Use thick wires** for power connections
+- **Inject power** every 100-200 LEDs
+- **Safety**: Incorrect wiring can cause fire hazard
+
+## Protocol Commands
+
+The DOF-compatible protocol uses these serial commands:
+
+| Command | Description | Data Format |
+|---------|-------------|-------------|
+| `L` | Set LED strip length | `word: length` |
+| `F` | Fill area with color | `word: first_led, word: count, 3_bytes: RGB` |
+| `R` | Set LED data | `word: first_led, word: count, RGB_array` |
+| `O` | Output data to strips | none |
+| `C` | Clear all LEDs | none |
+| `V` | Get firmware version | returns: `byte: major, byte: minor` |
+| `M` | Get max LEDs per strip | returns: `word: max_leds` |
+
+All commands return `A` (ACK) on success or `N` (NACK) on error.
+
+## macOS Controller Features
+
+### Command Line Usage
+```bash
+# List available serial ports
+./teensy_led_controller --list-ports
+
+# Run comprehensive demo
+./teensy_led_controller --port /dev/cu.usbmodem123456 --demo
+
+# Show help
+./teensy_led_controller --help
+```
+
+### Demo Features
+1. **Device Info**: Shows firmware version and LED limits
+2. **Color Cycle**: Red → Green → Blue → Yellow → Magenta → Cyan → White → Off
+3. **Rainbow Pattern**: Each LED shows a different rainbow color
+4. **Fast Color Cycling**: Rapid color changes for 10 seconds
+5. **Strobe Effect**: Bright white flashing
+6. **Random Chaos**: Each LED gets a random color
+7. **Cleanup**: Turns off all LEDs
+
+### Customizing LED Count
+To change the demo for your LED strip count:
+
+1. Open `macos_controller/src/main.cpp`
+2. Find line 47: `const uint16_t demo_length = 35;`
+3. Change `35` to your LED count
+4. Rebuild: `make` in the build directory
+
+### Programming Example
+```cpp
+#include "teensy_controller.h"
+
+TeensyController controller;
+if (controller.connect("/dev/cu.usbmodem123456")) {
+    // Set strip length
+    controller.setStripLength(50);
+    
+    // Fill first 10 LEDs with red
+    Color red(255, 0, 0);
+    controller.fillLEDs(0, 10, red);
+    
+    // Set individual LED colors
+    std::vector<Color> colors = {
+        Color(255, 0, 0),    // Red
+        Color(0, 255, 0),    // Green
+        Color(0, 0, 255)     // Blue
+    };
+    controller.setLEDData(10, colors);
+    
+    // Output to strips
+    controller.outputData();
+}
+```
+
+## Configuration Options
+
+### Teensy Firmware (`src/main.cpp`)
+```cpp
+// Maximum LEDs per strip (adjust for your Teensy model)
+#define MaxLedsPerStrip 80      // Teensy LC: 80, Teensy 3.x: 1100
+
+// Default strip length
+word configuredStripLength = 80;
+
+// Firmware version
+#define FirmwareVersionMajor 2
+#define FirmwareVersionMinor 0
+```
+
+## Built-in Test Mode
+
+Ground **pin 17** during startup to run the built-in hardware test:
+- Cycles through colors: Red → Green → Blue → Yellow → Pink → Orange → White → Off  
+- Tests all connected strips simultaneously
+- Each color displays for 3 seconds
+- Built-in LED indicates test progress
+
+## PlatformIO Configuration
+
+The included `platformio.ini` supports multiple environments:
+
+```ini
+[env:teensylc]
+platform = teensy
+board = teensylc
+framework = arduino
+lib_deps = 
+    paulstoffregen/OctoWS2811
+
+[env:teensy31]
+platform = teensy
+board = teensy31
+framework = arduino
+lib_deps = 
+    paulstoffregen/OctoWS2811
+
+[env:teensy32]
+platform = teensy
+board = teensy32
+framework = arduino
+lib_deps = 
+    paulstoffregen/OctoWS2811
+```
+
+## Memory Usage
+
+| Program | RAM Usage | Flash Usage |
+|---------|-----------|-------------|
+| **Main Controller (Teensy LC)** | 70.4% (5,764 bytes) | 16.6% |
+| **Main Controller (Teensy 3.x)** | ~20% | ~15% |
+
+## Troubleshooting
+
+### LED Strip Not Responding
+1. **Check power supply**: Separate 12V supply required
+2. **Verify connections**: Data pin through 100Ω resistor
+3. **Common ground**: Teensy GND to LED strip GND
+4. **Level shifting**: May need 3.3V→5V converter for some strips
+
+### Serial Communication Issues
+1. **Check port name**: Use `--list-ports` to find correct port
+2. **Try different baud rates**: Default is 9600 (USB speed auto-negotiated)
+3. **Reset Teensy**: Unplug and reconnect USB
+
+### Memory Issues (Teensy LC)
+1. **Reduce LED count**: Maximum 80 per strip
+2. **Use fewer strips**: Total memory shared among all strips
+
+## Dependencies
+
+### Teensy Firmware
+- **OctoWS2811 Library**: Automatically installed by PlatformIO
+- **Arduino/Teensyduino**: For Arduino IDE compilation
+
+### macOS Controller
+- **libserialport**: Located at `/Users/jmillard/libdof/third-party/runtime-libs/macos/arm64/`
+- **CMake 3.16+**
+- **C++17 compiler**
+
+## Direct Output Framework Integration
+
+This controller is fully compatible with DOF R3+. Configure in DOF as:
+- **Controller Type**: TeensyStripController
+- **Port**: Your Teensy's serial port
+- **LED Configuration**: Match your physical strip layout
+
+## Integrated Products
+
+The **Oak Micros Pinball Addressable LEDs (PAL)** board is a pre-built solution using this firmware:
+- Teensy 3.2 with screw terminals
+- Built-in test button
+- 6 main LED outputs + 2 header outputs
+- [User Guide](https://drive.google.com/open?id=1Zk_5RxsWX4VIPhT4XtGlj1rNlBTug39a) | [VPForums Thread](https://www.vpforums.org/index.php?showtopic=43482)
 
 ![Oak Micros PAL board](http://vpforums.org/imghost/24/pal_board.jpg)
 
-For further information read the [user guide](https://drive.google.com/open?id=1Zk_5RxsWX4VIPhT4XtGlj1rNlBTug39a) and see [this thread](https://www.vpforums.org/index.php?showtopic=43482) on VPForums.org.
+## Performance Notes
 
-Documentation
--------------
-More information can be found in the wiki for this project: https://github.com/DirectOutput/TeensyStripController/wiki
+**Update frequency estimation**:
+- **Time per LED**: ~30 microseconds
+- **Example**: 500 LEDs = 15ms = ~66 Hz maximum
+- **Recommendation**: Stay above 30 Hz for smooth animation
 
+## License
 
-Firmware Downloads
-------------------
-Compiled firmware files can be downloaded from: https://github.com/DirectOutput/TeensyStripController/releases
+See LICENSE file in the repository.
 
-License
--------
-See License file in the repo.
+## Links
+
+- **Documentation**: [Project Wiki](https://github.com/DirectOutput/TeensyStripController/wiki)
+- **Releases**: [Compiled Firmware](https://github.com/DirectOutput/TeensyStripController/releases)
+- **DOF Integration**: [DOF Documentation](http://directoutput.github.io/DirectOutput/)
