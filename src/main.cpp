@@ -51,7 +51,7 @@ Required Connections
    
 */
 
-#include <OctoWS2811.h> // Use standard OctoWS2811 library instead
+#include <Adafruit_NeoPixel.h> // Use Adafruit_NeoPixel instead of OctoWS2811
 
 // Function declarations
 void SetBlinkMode(int Mode);
@@ -70,6 +70,8 @@ byte ReceiveByte();
 word ReceiveWord();
 void Test();
 void ColorWipe(int color, int wait);
+void SetPixelColor(word ledNr, int color);
+Adafruit_NeoPixel* GetStrip(int stripNum);
 
 //Definiton of Major and Minor part of the firmware version. This value can be received using the V command.
 //If something is changed in the code the number should be increased.
@@ -77,8 +79,7 @@ void ColorWipe(int color, int wait);
 #define FirmwareVersionMinor 0
 
 //Defines the max number of leds which is allowed per ledstrip.
-//Reduced for Teensy LC due to limited RAM (8KB total)
-#define MaxLedsPerStrip 80
+#define MaxLedsPerStrip 256
 
 //Defines the Pinnumber to which the built in led of the Teensy is connected.
 //For Teensy 3.2, 3.1 this is pin 13, if you use a newer Teensy version (not available at the time of writing) you might need to change this number.
@@ -87,29 +88,64 @@ void ColorWipe(int color, int wait);
 // Defines the Pinnumber for the test button which is low when pressed
 #define TestPin 17
 
-//Memory buffers for the OctoWS2811 lib
-DMAMEM int displayMemory[MaxLedsPerStrip*6];
-int drawingMemory[MaxLedsPerStrip*6];
 
 //Variable used to control the blinking and flickering of the led of the Teensy
 elapsedMillis BlinkTimer;
 int BlinkMode;
 elapsedMillis BlinkModeTimeoutTimer;
 
-//Config definition for the OctoWS2811 lib
-const int config = WS2811_RGB | WS2811_800kHz; //Dont change the color order (even if your strip are GRB). DOF takes care of this issue (see config of ledstrip toy)
+//Config definition for the Adafruit_NeoPixel lib
+const int config = NEO_GRB + NEO_KHZ800; //Dont change the color order (even if your strip are GRB). DOF takes care of this issue (see config of ledstrip toy)
 
-OctoWS2811 leds(MaxLedsPerStrip, displayMemory, drawingMemory, config);
+Adafruit_NeoPixel strip0(MaxLedsPerStrip, 2, config);  // Pin 2
+Adafruit_NeoPixel strip1(MaxLedsPerStrip, 14, config); // Pin 14
+Adafruit_NeoPixel strip2(MaxLedsPerStrip, 7, config);  // Pin 7
+Adafruit_NeoPixel strip3(MaxLedsPerStrip, 8, config);  // Pin 8
+Adafruit_NeoPixel strip4(MaxLedsPerStrip, 6, config);  // Pin 6
+Adafruit_NeoPixel strip5(MaxLedsPerStrip, 20, config); // Pin 20
+Adafruit_NeoPixel strip6(MaxLedsPerStrip, 21, config); // Pin 21
+Adafruit_NeoPixel strip7(MaxLedsPerStrip, 5, config);  // Pin 5
 
-word configuredStripLength=80; // Reduced for Teensy LC
+word configuredStripLength=256; // 256 LEDs per strip, 8 strips total
 
 //Setup of the system. Is called once on startup.
 void setup() {
   Serial.begin(9600); // This has no effect. USB bitrate (12MB) will be used anyway.
 
   //Initialize the lib for the leds
-  leds.begin();
-  leds.show();
+  strip0.begin();
+  strip1.begin();
+  strip2.begin();
+  strip3.begin();
+  strip4.begin();
+  strip5.begin();
+  strip6.begin();
+  strip7.begin();
+  
+  for (word i = 0; i < configuredStripLength * 8; i++) {
+    SetPixelColor(i, 0x101010);
+  }
+  strip0.show();
+  strip1.show();
+  strip2.show();
+  strip3.show();
+  strip4.show();
+  strip5.show();
+  strip6.show();
+  strip7.show();
+  delay(1000);
+  
+  for (word i = 0; i < configuredStripLength * 8; i++) {
+    SetPixelColor(i, 0x000000);
+  }
+  strip0.show();
+  strip1.show();
+  strip2.show();
+  strip3.show();
+  strip4.show();
+  strip5.show();
+  strip6.show();
+  strip7.show();
 
   //Initialize the led pin
   pinMode(LedPin,OUTPUT);
@@ -236,10 +272,16 @@ void Blink() {
 
 //Outputs the data in the ram to the ledstrips
 void OutputData() {
-   leds.show();
+   strip0.show();
+   strip1.show();
+   strip2.show();
+   strip3.show();
+   strip4.show();
+   strip5.show();
+   strip6.show();
+   strip7.show();
    Ack();
 }
-
 
 //Fills the given area of a ledstrip with a color
 void Fill() {
@@ -252,7 +294,7 @@ void Fill() {
    if( firstLed<=configuredStripLength*8 && numberOfLeds>0 && firstLed+numberOfLeds-1<=configuredStripLength*8 ) {
        word endLedNr=firstLed+numberOfLeds;
        for(word ledNr=firstLed; ledNr<endLedNr;ledNr++) {
-         leds.setPixel(ledNr,ColorData);
+         SetPixelColor(ledNr,ColorData);
        }
        Ack();
    } else {
@@ -262,7 +304,6 @@ void Fill() {
   
   
 }
-
 
 //Receives data for the ledstrips - MODIFIED FOR DOF COMPATIBILITY
 void ReceiveData() {
@@ -281,7 +322,7 @@ void ReceiveData() {
       
       // Combine RGB into single color value
       int color = (r << 16) | (g << 8) | b;
-      leds.setPixel(ledNr, color);
+      SetPixelColor(ledNr, color);
     }
 
     Ack();
@@ -309,7 +350,7 @@ void SetLedStripLength() {
 //Clears the data for all configured leds
 void  ClearAllLedData() {
   for(word ledNr=0;ledNr<configuredStripLength*8;ledNr++) {
-    leds.setPixel(ledNr,0);
+    SetPixelColor(ledNr,0);
   }
   Ack();
 }
@@ -408,16 +449,50 @@ void Test() {
 
 void ColorWipe(int color, int wait)
 {   
-  for (int i=0; i < leds.numPixels(); i++) {
-    leds.setPixel(i, color);
+  for (word i=0; i < configuredStripLength*8; i++) {
+    SetPixelColor(i, color);
   }
 
   // wait before turning on LEDs and also turn on indicator LED
   delayMicroseconds(100000);
   digitalWrite(LedPin,1);
-  leds.show();
+  strip0.show();
+  strip1.show();
+  strip2.show();
+  strip3.show();
+  strip4.show();
+  strip5.show();
+  strip6.show();
+  strip7.show();
 
   // wait for desginated timeout and then turn off indicator LED
   delayMicroseconds(wait);
   digitalWrite(LedPin,0);
 }   
+
+Adafruit_NeoPixel* GetStrip(int stripNum) {
+  switch(stripNum) {
+    case 0: return &strip0;
+    case 1: return &strip1;
+    case 2: return &strip2;
+    case 3: return &strip3;
+    case 4: return &strip4;
+    case 5: return &strip5;
+    case 6: return &strip6;
+    case 7: return &strip7;
+    default: return &strip0;
+  }
+}
+
+void SetPixelColor(word ledNr, int color) {
+  word stripNum = ledNr / configuredStripLength;
+  word pixelNum = ledNr % configuredStripLength;
+  
+  if (stripNum < 8 && pixelNum < configuredStripLength) {
+    Adafruit_NeoPixel* strip = GetStrip(stripNum);
+    byte r = (color >> 16) & 0xFF;
+    byte g = (color >> 8) & 0xFF;
+    byte b = color & 0xFF;
+    strip->setPixelColor(pixelNum, strip->Color(r, g, b));
+  }
+}
